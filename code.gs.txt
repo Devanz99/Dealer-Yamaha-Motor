@@ -1,0 +1,132 @@
+/**
+ * SISTEM DATABASE DEALER YAMAHA (CLOUD BACKEND)
+ * File: code.gs
+ * Hubungkan file ini dengan Spreadsheet Anda di Google Drive.
+ */
+
+// Ganti URL di bawah ini dengan URL Google Spreadsheet Anda sendiri!
+const SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1N2ut3w0NUjP6hxvpQ9ZeVV4BZ4xa6WroJZrL1cWiJR4";
+
+/**
+ * 1. FUNGSI MERENDER HALAMAN UTAMA (doGet)
+ * Membuka akses halaman index.html agar bisa berjalan di browser / iframe tanpa hambatan.
+ */
+function doGet(e) {
+  var template = HtmlService.createTemplateFromFile('index');
+  var htmlOutput = template.evaluate();
+  
+  // Mengatur viewport agar responsif di perangkat mobile
+  htmlOutput.addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  
+  // Mengizinkan iframe agar tidak terkena eror pemblokiran X-Frame-Options
+  htmlOutput.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  
+  return htmlOutput;
+}
+
+/**
+ * Mendapatkan akses ke Spreadsheet aktif atau eksternal via URL
+ */
+function getDb() {
+  try {
+    if (SPREADSHEET_URL.indexOf("YOUR_SPREADSHEET_ID") !== -1) {
+      return SpreadsheetApp.getActiveSpreadsheet();
+    }
+    return SpreadsheetApp.openByUrl(SPREADSHEET_URL);
+  } catch (err) {
+    return SpreadsheetApp.getActiveSpreadsheet();
+  }
+}
+
+/**
+ * 2. AMBIL DATA INVENTORY DARI SPREADSHEET
+ * Fungsi ini dipanggil secara asinkron oleh index.html untuk menampilkan stok unit motor
+ */
+function getInventoryData() {
+  try {
+    var db = getDb();
+    var sheet = db.getSheetByName("Inventory");
+    
+    // Jika sheet belum ada, buat otomatis beserta header dan data sampel
+    if (!sheet) {
+      sheet = db.insertSheet("Inventory");
+      sheet.appendRow(["id", "model", "tipe", "warna", "harga", "stok"]);
+      sheet.appendRow(["M001", "Yamaha All New NMAX 155 Connected/ABS", "MAXi (Matic)", "Matte Black", 36150000, 5]);
+      sheet.appendRow(["M002", "Yamaha Aerox 155 Connected", "MAXi (Matic)", "Cyber City", 27975000, 3]);
+      sheet.appendRow(["M003", "Yamaha Grand Filano Hybrid-Connected", "Classy (Matic)", "Elixir Dark Silver", 27500000, 1]);
+    }
+    
+    var data = sheet.getDataRange().getValues();
+    var list = [];
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      list.push({
+        id: String(row[0]),
+        model: String(row[1]),
+        tipe: String(row[2]),
+        warna: String(row[3]),
+        harga: Number(row[4] || 0),
+        stok: Number(row[5] || 0)
+      });
+    }
+    return list;
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * 3. SIMPAN ATAU UPDATE DATA MOTOR (ADMIN INVENTORY)
+ */
+function saveMotor(motorObj) {
+  try {
+    var db = getDb();
+    var sheet = db.getSheetByName("Inventory");
+    var data = sheet.getDataRange().getValues();
+    var foundIndex = -1;
+    
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(motorObj.id)) {
+        foundIndex = i + 1;
+        break;
+      }
+    }
+    
+    if (foundIndex !== -1) {
+      // Edit baris lama
+      sheet.getRange(foundIndex, 2).setValue(motorObj.model);
+      sheet.getRange(foundIndex, 3).setValue(motorObj.tipe);
+      sheet.getRange(foundIndex, 4).setValue(motorObj.warna);
+      sheet.getRange(foundIndex, 5).setValue(motorObj.harga);
+      sheet.getRange(foundIndex, 6).setValue(motorObj.stok);
+    } else {
+      // Tambah baris baru
+      sheet.appendRow([motorObj.id, motorObj.model, motorObj.tipe, motorObj.warna, motorObj.harga, motorObj.stok]);
+    }
+    return { success: true };
+  } catch (e) {
+    throw new Error(e.message);
+  }
+}
+
+/**
+ * 4. HAPUS DATA MOTOR DARI DATABASE SPREADSHEET
+ */
+function deleteMotor(id) {
+  try {
+    var db = getDb();
+    var sheet = db.getSheetByName("Inventory");
+    var data = sheet.getDataRange().getValues();
+    
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(id)) {
+        sheet.deleteRow(i + 1);
+        break;
+      }
+    }
+    return { success: true };
+  } catch (e) {
+    throw new Error(e.message);
+  }
+}
